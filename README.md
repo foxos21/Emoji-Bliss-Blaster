@@ -1,7 +1,10 @@
-# use the mouse to move.
+# Controls🛂
 
-# left click to shoot.
+🌊use the mouse to move.
 
-# escape key to pause.
+🌠left click to shoot.
 
-## HAVE FUN! :D
+⏳escape key to pause.
+
+
+### HAVE FUN! :D
