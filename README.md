@@ -1,4 +1,4 @@
-# Controls🛂
+# 🛂Controls
 
 🌊use the mouse to move.
 
