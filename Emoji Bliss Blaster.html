@@ -1,0 +1,460 @@
+<html><head><base href="https://websim.ai" /><meta charset="UTF-8"><title>Emoji Bliss Blaster</title><style>
+body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+#gameCanvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 20px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+#pauseButton {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 24px;
+    padding: 10px 20px;
+    background-color: #4a4a4a;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    z-index: 10;
+}
+#pauseButton:hover {
+    background-color: #666;
+}
+#pauseOverlay, #gameOverOverlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 48px;
+    display: none;
+}
+#gameOverBox {
+    background-color: white;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+}
+#gameOverText {
+    color: #4a4a4a;
+    font-size: 24px;
+    margin-bottom: 20px;
+}
+#playAgainButton {
+    font-size: 18px;
+    padding: 10px 20px;
+    background-color: #4a4a4a;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+.confetti {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background-color: #f0f0f0;
+    position: absolute;
+    top: -10px;
+    will-change: transform;
+}
+#pauseInstructions {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 18px;
+    color: white;
+    text-align: center;
+}
+#countdown {
+    font-size: 48px;
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #f0f0f0;
+}
+</style></head><body>
+<canvas id="gameCanvas"></canvas>
+<button id="pauseButton">Pause</button>
+<div id="countdown">3</div>
+<div id="pauseOverlay">
+    PAUSED
+    <div id="pauseInstructions">Press ESC to resume</div>
+</div>
+<div id="gameOverOverlay">
+    <div id="gameOverBox">
+        <div id="gameOverText"></div>
+        <button id="playAgainButton">Play Again</button>
+    </div>
+</div>
+<script>
+// Countdown timer function
+function startCountdown(duration, callback) {
+    let timer = duration;
+    const countdownElement = document.getElementById('countdown');
+    const interval = setInterval(() => {
+        countdownElement.textContent = timer;
+        timer--;
+        if (timer < 0) {
+            clearInterval(interval);
+            countdownElement.textContent = "";
+            if (callback) {
+                callback();
+            }
+        }
+    }, 1000);
+}
+
+// Function to be executed after countdown
+function afterCountdown() {
+	const canvas = document.getElementById('gameCanvas');
+	const ctx = canvas.getContext('2d');
+	const pauseButton = document.getElementById('pauseButton');
+	const pauseOverlay = document.getElementById('pauseOverlay');
+	const gameOverOverlay = document.getElementById('gameOverOverlay');
+	const gameOverText = document.getElementById('gameOverText');
+	const playAgainButton = document.getElementById('playAgainButton');
+
+	canvas.width = 800;
+	canvas.height = 600;
+
+	const player = {
+	    x: canvas.width / 2,
+	    y: canvas.height - 50,
+	    size: 40,
+	    speed: 5
+	};
+
+	let bullets = [];
+	let enemies = [];
+	let particles = [];
+	let score = 0;
+	let scoreToReach = 500;
+	let health = 3;
+	let isPaused = false;
+	let isGameOver = false;
+	let baseEnemySpeed = 2;
+	let enemySpeedMultiplier = 1;
+
+	// Initialize Web Audio API
+	const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+	let backgroundSoundInterval;
+
+	function createSynth(frequency, type, duration, gain = 0.5, modulationFrequency = 0) {
+	    const oscillator = audioContext.createOscillator();
+	    const gainNode = audioContext.createGain();
+	    
+	    oscillator.type = type;
+	    oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+	    
+	    if (modulationFrequency > 0) {
+		const modulationOsc = audioContext.createOscillator();
+		const modulationGain = audioContext.createGain();
+		modulationOsc.frequency.setValueAtTime(modulationFrequency, audioContext.currentTime);
+		modulationGain.gain.setValueAtTime(frequency / 2, audioContext.currentTime);
+		modulationOsc.connect(modulationGain);
+		modulationGain.connect(oscillator.frequency);
+		modulationOsc.start();
+		modulationOsc.stop(audioContext.currentTime + duration);
+	    }
+	    
+	    gainNode.gain.setValueAtTime(gain, audioContext.currentTime);
+	    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+	    
+	    oscillator.connect(gainNode);
+	    gainNode.connect(audioContext.destination);
+	    
+	    oscillator.start();
+	    oscillator.stop(audioContext.currentTime + duration);
+	}
+
+	function playShootSound() {
+	    createSynth(440, 'sine', 0.1, 0.3);
+	    createSynth(880, 'square', 0.1, 0.2);
+	    createSynth(1320, 'triangle', 0.05, 0.1);
+	}
+
+	function playHitSound() {
+	    createSynth(220, 'sawtooth', 0.2, 0.4);
+	    createSynth(110, 'triangle', 0.2, 0.3);
+	    createSynth(55, 'sine', 0.3, 0.2);
+	}
+
+	function playPopSound() {
+	    createSynth(660, 'sine', 0.1, 0.3, 10);
+	    createSynth(770, 'sine', 0.1, 0.2, 15);
+	    createSynth(880, 'sine', 0.05, 0.1, 20);
+	}
+
+	function playLevelUpSound() {
+	    createSynth(523.25, 'sine', 0.1, 0.3);
+	    setTimeout(() => createSynth(659.25, 'sine', 0.1, 0.3), 100);
+	    setTimeout(() => createSynth(783.99, 'sine', 0.1, 0.3), 200);
+	    setTimeout(() => createSynth(1046.50, 'sine', 0.2, 0.3), 300);
+	}
+
+	function playBackgroundSound() {
+	    createSynth(220, 'sine', 0.5, 0.05, 5);
+	    createSynth(330, 'sine', 0.5, 0.03, 7);
+	}
+
+	function startBackgroundSound() {
+	    backgroundSoundInterval = setInterval(playBackgroundSound, 500);
+	}
+
+	function stopBackgroundSound() {
+	    clearInterval(backgroundSoundInterval);
+	}
+
+	function drawPlayer() {
+	    ctx.font = `${player.size}px Arial`;
+	    ctx.textAlign = 'center';
+	    ctx.textBaseline = 'middle';
+	    ctx.fillText('🐱', player.x, player.y);
+	}
+
+	function drawBullets() {
+	    ctx.fillStyle = '#FFD700';
+	    bullets.forEach(bullet => {
+		ctx.beginPath();
+		ctx.arc(bullet.x, bullet.y, 5, 0, Math.PI * 2);
+		ctx.fill();
+	    });
+	}
+
+	function drawEnemies() {
+	    enemies.forEach(enemy => {
+		ctx.font = '30px Arial';
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		ctx.fillText(enemy.emoji, enemy.x, enemy.y);
+	    });
+	}
+
+	function drawParticles() {
+	    particles.forEach(particle => {
+		ctx.fillStyle = particle.color;
+		ctx.beginPath();
+		ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+		ctx.fill();
+	    });
+	}
+
+	function drawScore() {
+	    ctx.font = '24px Arial';
+	    ctx.fillStyle = '#4a4a4a';
+	    ctx.textAlign = 'left';
+	    ctx.fillText(`Score: ${score}`, 20, 30);
+	}
+
+	function drawHealth() {
+	    ctx.font = '24px Arial';
+	    ctx.fillStyle = '#4a4a4a';
+	    ctx.textAlign = 'right';
+	    ctx.fillText('❤️'.repeat(health), canvas.width - 20, 30);
+	}
+
+	function updateBullets() {
+	    bullets = bullets.filter(bullet => bullet.y > 0);
+	    bullets.forEach(bullet => {
+		bullet.y -= 10;
+	    });
+	}
+
+	function updateEnemies() {
+	    if (Math.random() < 0.02) {
+		const emoji = ['😈', '👾', '👽', '🤖'][Math.floor(Math.random() * 4)];
+		enemies.push({
+		    x: Math.random() * canvas.width,
+		    y: 0,
+		    emoji: emoji
+		});
+	    }
+	    
+	    enemies = enemies.filter(enemy => enemy.y < canvas.height);
+	    enemies.forEach(enemy => {
+		enemy.y += baseEnemySpeed * enemySpeedMultiplier;
+	    });
+	}
+
+	function updateParticles() {
+	    particles = particles.filter(particle => particle.life > 0);
+	    particles.forEach(particle => {
+		particle.x += particle.vx;
+		particle.y += particle.vy;
+		particle.life -= 1;
+		particle.size *= 0.95;
+	    });
+	}
+
+	function checkCollisions() {
+	    bullets.forEach(bullet => {
+		enemies.forEach((enemy, index) => {
+		    if (Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y) < 20) {
+		        enemies.splice(index, 1);
+		        score += 10;
+		        playPopSound();
+		        createParticles(enemy.x, enemy.y);
+		        
+		        if (score >= scoreToReach) {
+		            playLevelUpSound();
+		            scoreToReach += 500;
+		            enemySpeedMultiplier += 0.1; // Gradual speed increase
+		        }
+		    }
+		});
+	    });
+
+	    enemies.forEach((enemy, index) => {
+		if (Math.hypot(player.x - enemy.x, player.y - enemy.y) < 30) {
+		    enemies.splice(index, 1);
+		    health -= 1;
+		    playHitSound();
+		    if (health <= 0) {
+		        gameOver();
+		    }
+		}
+	    });
+	}
+
+	function createParticles(x, y) {
+	    for (let i = 0; i < 10; i++) {
+		particles.push({
+		    x: x,
+		    y: y,
+		    vx: (Math.random() - 0.5) * 5,
+		    vy: (Math.random() - 0.5) * 5,
+		    size: Math.random() * 5 + 2,
+		    color: `hsl(${Math.random() * 360}, 100%, 50%)`,
+		    life: 30
+		});
+	    }
+	}
+
+	function togglePause() {
+	    isPaused = !isPaused;
+	    if (isPaused) {
+		pauseButton.textContent = 'Game Paused';
+		pauseOverlay.style.display = 'flex';
+		stopBackgroundSound();
+	    } else {
+		pauseButton.textContent = 'Pause';
+		pauseOverlay.style.display = 'none';
+		startBackgroundSound();
+		requestAnimationFrame(gameLoop);
+	    }
+	}
+
+	function gameOver() {
+	    isGameOver = true;
+	    stopBackgroundSound();
+	    gameOverText.textContent = `You died. Score: ${score}`;
+	    gameOverOverlay.style.display = 'flex';
+	    createConfetti();
+	}
+
+	function createConfetti() {
+	    for (let i = 0; i < 100; i++) {
+		const confetti = document.createElement('div');
+		confetti.className = 'confetti';
+		confetti.style.left = `${Math.random() * 100}%`;
+		confetti.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+		confetti.style.animationDuration = `${Math.random() * 3 + 2}s`;
+		confetti.style.animationDelay = `${Math.random() * 2}s`;
+		document.body.appendChild(confetti);
+	    }
+	}
+
+	function restartGame() {
+	    score = 0;
+	    scoreToReach = 500;
+	    health = 3;
+	    baseEnemySpeed = 2;
+	    enemySpeedMultiplier = 1;
+	    bullets = [];
+	    enemies = [];
+	    particles = [];
+	    isGameOver = false;
+	    isPaused = false;
+	    pauseButton.textContent = 'Pause';
+	    gameOverOverlay.style.display = 'none';
+	    document.querySelectorAll('.confetti').forEach(c => c.remove());
+	    startBackgroundSound();
+	    gameLoop();
+	}
+
+	function gameLoop() {
+	    if (!isPaused && !isGameOver) {
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+		
+		drawPlayer();
+		drawBullets();
+		drawEnemies();
+		drawParticles();
+		drawScore();
+		drawHealth();
+		
+		updateBullets();
+		updateEnemies();
+		updateParticles();
+		
+		checkCollisions();
+		
+		requestAnimationFrame(gameLoop);
+	    }
+	}
+
+	document.addEventListener('mousemove', (event) => {
+	    if (!isPaused && !isGameOver) {
+		const rect = canvas.getBoundingClientRect();
+		player.x = event.clientX - rect.left;
+	    }
+	});
+
+	document.addEventListener('click', (event) => {
+	    if (!isPaused && !isGameOver && event.target !== pauseButton) {
+		bullets.push({x: player.x, y: player.y});
+		playShootSound();
+	    }
+	});
+
+	document.addEventListener('keydown', (event) => {
+	    if (event.key === 'Escape') {
+		togglePause();
+	    }
+	});
+
+	pauseButton.addEventListener('click', togglePause);
+	playAgainButton.addEventListener('click', restartGame);
+
+	startBackgroundSound();
+	gameLoop();
+}
+
+
+// Start the countdown for 3 seconds and execute afterCountdown function
+window.onload = () => {
+    startCountdown(3, afterCountdown);
+};
+</script></body></html>
