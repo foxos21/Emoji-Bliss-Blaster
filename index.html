@@ -109,6 +109,30 @@ body, html {
     </div>
 </div>
 <script>
+let clickCount = 0;
+let clickLimit = 10;  // Set the maximum clicks allowed within the time frame
+let timeFrame = 2000; // Time frame in milliseconds (2000ms = 2 seconds)
+
+// Function to reset the click count after the time frame
+function resetClickCount() {
+  clickCount = 0;
+}
+
+// Event listener to track mouse clicks
+document.addEventListener('click', () => {
+  clickCount++;
+
+  // Check if the click count exceeds the limit
+  if (clickCount >= clickLimit) {
+    alert('You are clicking too fast! The page will now reload. FUCK YOU HYNEK!');
+    location.reload(); // Reload the page
+  }
+
+  // Reset the click count after the specified time frame
+  setTimeout(resetClickCount, timeFrame);
+});
+
+	
 // Countdown timer function
 function startCountdown(duration, callback) {
     let timer = duration;
